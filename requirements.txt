@@ -32,7 +32,7 @@ frozenlist==1.4.1
 fsspec==2024.2.0
 gitdb==4.0.11
 GitPython==3.1.41
-groqcloud @ git+ssh://git@github.com/definitive-io/groqcloud-python.git@1c7e4677c395264d479a37f0ed896131a08446f9
+groqcloud==0.0.1
 h11==0.14.0
 httpcore==1.0.2
 httpx==0.26.0
