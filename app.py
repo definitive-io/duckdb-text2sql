@@ -187,7 +187,7 @@ def main():
         st.image('groqcloud_darkmode.png')
 
     st.title("Query Generator")
-    st.write('')
+    st.write('Ask about sth')
 
     # Set up the customization options
     st.sidebar.title('Customization')
