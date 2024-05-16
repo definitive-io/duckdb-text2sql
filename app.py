@@ -117,7 +117,7 @@ def get_reflection(client,full_prompt,llm_response,model):
 
     Ensure that the following rules are satisfied when correcting your response:
     1. SQL is valid DuckDB SQL, given the provided metadata and the DuckDB querying rules
-    2. The query SPECIFICALLY references the correct tables: employees.csv and purchases.csv, and those tables are properly aliased? (this is the most likely cause of failure)
+    2. The query SPECIFICALLY references the correct tables: crm.csv, and those tables are properly aliased? (this is the most likely cause of failure)
     3. Response is in the correct format ({{sql: <sql_here>}} or {{"error": <explanation here>}}) with no additional text?
     4. All fields are appropriately named
     5. There are no unnecessary sub-queries
@@ -186,15 +186,15 @@ def main():
     with col:  
         st.image('groqcloud_darkmode.png')
 
-    st.title("DuckDB Query Generator")
-    st.write('Welcome! Feel free to ask questions about the data contained in the `employees.csv` and `purchases.csv` files. You might ask about specific employee details or inquire about purchase records. For example, you could ask "Who are the employees?" or "What are the most recent purchases?". The application matches your question to SQL queries to provide accurate and relevant results. Enjoy exploring the data!')
+    st.title("Query Generator")
+    st.write('현재 테이블 데이터로 쿼리를 생성해 데이터를 분석 및 조회를 할 수 있게 해줍니다. 무엇이든 질문해주세요')
 
     # Set up the customization options
     st.sidebar.title('Customization')
     additional_context = st.sidebar.text_input('Enter additional summarization context for the LLM here (i.e. write it in spanish):')
     model = st.sidebar.selectbox(
         'Choose a model',
-        ['llama3-8b-8192', 'mixtral-8x7b-32768', 'gemma-7b-it']
+        ['llama3-70b-8192', 'llama3-8b-8192', 'mixtral-8x7b-32768', 'gemma-7b-it']
     )
     max_num_reflections = st.sidebar.slider('Max reflections:', 0, 10, value=5)
 

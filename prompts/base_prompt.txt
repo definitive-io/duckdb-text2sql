@@ -12,14 +12,6 @@ Columns:
 거래금액 (INTEGER): The amount of money involved in the transaction.
 
 
-Table: purchases.csv
-Columns:
-purchase_id (INTEGER): A unique identifier for each purchase.
-purchase_date (DATE): Date of purchase
-employee_id (INTEGER): References the employee_id from the employees table, indicating which employee made the purchase.
-amount (FLOAT): The monetary value of the purchase.
-product_name (STRING): The name of the product purchased
-
 Given a user's question about this data, write a valid DuckDB SQL query that accurately extracts or calculates the requested information from these tables and adheres to SQL best practices for DuckDB, optimizing for readability and performance where applicable.
 
 Here are some tips for writing DuckDB queries:
