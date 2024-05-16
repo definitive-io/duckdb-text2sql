@@ -187,11 +187,11 @@ def main():
         st.image('groqcloud_darkmode.png')
 
     st.title("Query Generator")
-    st.write('Ask about sth')
+    st.write('질문을 하면 현재 시트 데이터에서 원하는 정보를 추출해줍니다.')
 
     # Set up the customization options
-    st.sidebar.title('Customization')
-    additional_context = st.sidebar.text_input('Enter additional summarization context for the LLM here (i.e. write it in korean):')
+    st.sidebar.title('추론모델 선택')
+    #additional_context = st.sidebar.text_input('Enter additional summarization context for the LLM here (i.e. write it in korean):')
     model = st.sidebar.selectbox(
         'Choose a model',
         ['llama3-70b-8192', 'llama3-8b-8192', 'mixtral-8x7b-32768', 'gemma-7b-it']

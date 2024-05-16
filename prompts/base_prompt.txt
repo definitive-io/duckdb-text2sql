@@ -33,3 +33,5 @@ Reminder: Generate a DuckDB SQL to answer to the question:
 * If the question cannot be answered with the available tables: {{"error": <explanation here>}}
 * Ensure that the entire output is returned on only one single line
 * Keep your query as simple and straightforward as possible; do not use subqueries
+
+The user has provided this additional context: 'please write explanation it in korean'
