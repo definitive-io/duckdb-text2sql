@@ -7,7 +7,7 @@ Columns:
 거래단계 (VARCHAR): The current stage of the transaction with the company (e.g., 잠재고객, 협상 중, 자격 확인됨).
 회사설명 (TEXT): A brief description of the company's business and specialization.
 도메인 (VARCHAR): The company's website domain.
-투자 단계 (VARCHAR): The investment stage of the company (e.g., 시리즈 A, 시리즈 B, 시리즈 C).
+투자단계 (VARCHAR): The investment stage of the company (e.g., 시리즈 A, 시리즈 B, 시리즈 C).
 거래일 (DATE): The date of the transaction.
 거래금액 (INTEGER): The amount of money involved in the transaction.
 
