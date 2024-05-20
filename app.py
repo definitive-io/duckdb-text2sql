@@ -40,7 +40,7 @@ def execute_duckdb_query(query, dir):
     DataFrame: The result of the query as a pandas DataFrame.
     """
     original_cwd = os.getcwd()
-    os.chdir(f"data/{dir}")
+    os.chdir('data')
 
     try:
         conn = duckdb.connect(database=":memory:", read_only=False)
@@ -243,7 +243,7 @@ def main():
 
                 # Get a summarization of the data and display it
                 summarization = get_summarization(
-                    client, user_question, results_df, model, additional_context
+                    client, user_question, results_df, model, additional_context=""
                 )
                 st.write(summarization.replace("$", "\\$"))
             else:
