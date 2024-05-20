@@ -243,7 +243,7 @@ def main():
 
                 # Get a summarization of the data and display it
                 summarization = get_summarization(
-                    client, user_question, results_df, model, additional_context=""
+                    client, user_question, results_df, model, additional_context
                 )
                 st.write(summarization.replace("$", "\\$"))
             else:
