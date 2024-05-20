@@ -29,7 +29,7 @@ def chat_with_groq(client, prompt, model):
     return completion.choices[0].message.content
 
 
-def execute_duckdb_query(query, dir):
+def execute_duckdb_query(query):
     """
     This function executes a SQL query on a DuckDB database and returns the result.
 
@@ -113,7 +113,7 @@ def get_reflection(client, full_prompt, llm_response, model, csv_name):
 
     Ensure that the following rules are satisfied when correcting your response:
     1. SQL is valid DuckDB SQL, given the provided metadata and the DuckDB querying rules
-    2. The query SPECIFICALLY references the correct tables: {csv_name}, and those tables are properly aliased? (this is the most likely cause of failure)
+    2. The query SPECIFICALLY references the correct tables: default.csv, and those tables are properly aliased? (this is the most likely cause of failure)
     3. Response is in the correct format ({{sql: <sql_here>}} or {{"error": <explanation here>}}) with no additional text?
     4. All fields are appropriately named
     5. There are no unnecessary sub-queries
@@ -122,7 +122,7 @@ def get_reflection(client, full_prompt, llm_response, model, csv_name):
     Rewrite the response and respond ONLY with the valid output format with no additional commentary
 
     """.format(
-        full_prompt=full_prompt, llm_response=llm_response, csv_name=csv_name
+        full_prompt=full_prompt, llm_response=llm_response
     )
 
     return chat_with_groq(client, reflection_prompt, model)
@@ -224,7 +224,7 @@ def main():
                 is_sql, result = get_json_output(llm_response)
                 if is_sql:
                     # If the response contains a SQL query, execute it
-                    results_df = execute_duckdb_query(result, 'default')
+                    results_df = execute_duckdb_query(result)
                     valid_response = True
                 else:
                     # If the response contains an error message, it's considered valid
