@@ -14,6 +14,16 @@ employee_id (INTEGER): References the employee_id from the employees table, indi
 amount (FLOAT): The monetary value of the purchase.
 product_name (STRING): The name of the product purchased
 
+Table: metrics.csv
+Columns:
+DATE_ID (DATE): Date of metrics.
+DAU (INTEGER): Daily Active User or DAU metric.
+INSTALLS (INTEGER): Number of user installs metric.
+REVENUE (INTEGER): Revenue in Australian dollars.
+SPENDERS (INTEGER): Number of spenders metric.
+PLAYER_HOURS_PLAYED (INTEGER): Total number of hours played by players metric.
+ADVERTISING_SPEND (INTEGER): Advertising spend in Australian dollars metric. 
+
 Given a user's question about this data, write a valid DuckDB SQL query that accurately extracts or calculates the requested information from these tables and adheres to SQL best practices for DuckDB, optimizing for readability and performance where applicable.
 
 Here are some tips for writing DuckDB queries:
