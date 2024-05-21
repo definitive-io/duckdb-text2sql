@@ -175,19 +175,31 @@ def main():
     """
     
     # Get the Groq API key and create a Groq client
-    groq_api_key = st.secrets["GROQ_API_KEY"]
+    groq_api_key = st.secrets["GROQ_API_KEY"]["value"]
     client = Groq(
         api_key=groq_api_key,
-        base_url=st.secrets["GROQ_BASE_URL"]
+       # base_url=st.secrets["GROQ_BASE_URL"]["value"]
     )
-
+    
+    #get all CSV filenames in the "data" folder
+    data_folder = "data"
+    csv_filenames = [f for f in os.listdir(data_folder) if f.endswith(".csv")]
+    
     # Set up the Streamlit interface
     spacer, col = st.columns([5, 1])  
     with col:  
-        st.image('groqcloud_darkmode.png')
+        st.image('logo.png')
 
-    st.title("DuckDB Query Generator")
-    st.write('Welcome! Feel free to ask questions about the data contained in the `employees.csv` and `purchases.csv` files. You might ask about specific employee details or inquire about purchase records. For example, you could ask "Who are the employees?" or "What are the most recent purchases?". The application matches your question to SQL queries to provide accurate and relevant results. Enjoy exploring the data!')
+    st.title("Intelligent Query Generator")
+    st.write("Welcome! Feel free to ask questions about the data contained in the following files:")
+    for filename in csv_filenames:
+        st.write(f"- :blue[{filename}]")
+    st.write("You might ask about specific details in these files or inquire about data across them. For example, you could ask:")
+    st.write("- Who are the employees in the employee data?")
+    st.write("- What are the most recent purchases?")
+    st.write("The application matches your question to analyze the data and provide accurate and relevant results. Enjoy exploring!")
+
+    #st.write('Welcome! Feel free to ask questions about the data contained in the `employees.csv` and `purchases.csv` files. You might ask about specific employee details or inquire about purchase records. For example, you could ask "Who are the employees?" or "What are the most recent purchases?". The application matches your question to SQL queries to provide accurate and relevant results. Enjoy exploring the data!')
 
     # Set up the customization options
     st.sidebar.title('Customization')
@@ -196,7 +208,7 @@ def main():
         'Choose a model',
         ['llama3-8b-8192', 'mixtral-8x7b-32768', 'gemma-7b-it']
     )
-    max_num_reflections = st.sidebar.slider('Max reflections:', 0, 10, value=5)
+    max_num_reflections = st.sidebar.slider('Max reflections:', 0, 10, value=8)
 
     # Load the base prompt
     with open('prompts/base_prompt.txt', 'r') as file:
