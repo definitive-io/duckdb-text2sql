@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "duckdb-text2sql"
+version = "0.1.0"
+description = ""
+authors = ["mj2tang <tmj2000@hotmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
