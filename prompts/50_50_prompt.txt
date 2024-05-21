@@ -28,8 +28,8 @@ You are Groq Advisor, and you are tasked with generating SQL queries for DuckDB 
     --------
     Reminder: Generate a DuckDB SQL to answer to the question:
     * respond as a valid JSON Document
-    * [Best] If the question can be answered with the available tables: {"sql": <sql here>} 
-    * If the question cannot be answered with the available tables: {"error": <explanation here>}
+    * [Best] If the question can be answered with the available tables: {{"sql": <sql here>}}
+    * If the question cannot be answered with the available tables: {{"error": <explanation here>}}
     * Ensure that the entire output is returned on only one single line
     * Keep your query as simple and straightforward as possible; do not use subqueries
 
