@@ -14,12 +14,7 @@ import json
 
 from pydantic import BaseModel
 
-
-
 app = FastAPI()
-
-class QueryRequest(BaseModel):
-    user_question: str
 
 
 def get_db_connection():
@@ -39,7 +34,7 @@ def get_db_connection():
 
 
 def generate_prompt_and_update_files(update_csv_path, save_csv_path, organization_id, sheet_id):
-    client = OpenAI(api_key=os.getenv("GPT_SERVER_KEY"))
+    client = OpenAI(api_key=config.GPT_SERVER_KEY)
 
     SYSTEM_TEMPLATE = """Please read the columns of the dataframe and provide a description of their attributes. write it in the same form as the example.
     ###Example
@@ -85,7 +80,7 @@ def generate_prompt_and_update_files(update_csv_path, save_csv_path, organizatio
     --------
     Reminder: Generate a DuckDB SQL to answer to the question:
     * respond as a valid JSON Document
-    * [Best] If the question can be answered with the available tables: {{"sql": <sql here>}} 
+    * [Best] If the question can be answered with the available tables: {{"sql": <sql here>}}
     * If the question cannot be answered with the available tables: {{"error": <explanation here>}}
     * Ensure that the entire output is returned on only one single line
     * Keep your query as simple and straightforward as possible; do not use subqueries
@@ -230,6 +225,12 @@ def export_csv(organization_id: int, sheet_id: int):
             connection.close()
 
 
+class QueryRequest(BaseModel):
+    user_question: str
+    organization_id: int
+    sheet_id: int
+
+
 def chat_with_groq(client, prompt, model):
     completion = client.chat.completions.create(
         model=model, messages=[{"role": "user", "content": prompt}]
@@ -237,12 +238,40 @@ def chat_with_groq(client, prompt, model):
     return completion.choices[0].message.content
 
 
-def execute_duckdb_query(query):
+def execute_duckdb_query(query, organization_id, sheet_id):
+    original_cwd = os.getcwd()
+    os.chdir('data')
+
+    file_name = f"{organization_id}_{sheet_id}.csv"
+    print(f"Executing query: {query}")
+    print('file_name:', file_name)
+
     try:
         conn = duckdb.connect(database=":memory:", read_only=False)
-        query_result = conn.execute(query).fetchdf().reset_index(drop=True)
+        # 파일이 존재하는지 확인하고 테이블로 로드
+        if os.path.exists(file_name):
+            table_name = f"table_{organization_id}_{sheet_id}"
+            conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM read_csv_auto('{file_name}')")
+            print(f"Table {table_name} created and data loaded.")
+
+            # 필요한 작업 수행 (예시로 테이블 조회)
+            query_result = conn.execute(f"SELECT * FROM {table_name}").fetchdf()
+            print(query_result)
+            query_result = conn.execute(query).fetchdf().reset_index(drop=True)
+
+        else:
+            print(f"File {file_name} does not exist.")
     finally:
+        # 작업이 끝나면 테이블 삭제
+        if os.path.exists(file_name):
+            conn.execute(f"DROP TABLE IF EXISTS {table_name}")
+            print(f"Table {table_name} deleted.")
+
+        # DuckDB 연결 종료
         conn.close()
+
+        # 작업 디렉토리를 원래의 디렉토리로 복원
+        os.chdir(original_cwd)
     return query_result
 
 
@@ -250,7 +279,6 @@ def get_json_output(llm_response):
     llm_response_no_escape = (
         llm_response.replace("\\n", " ")
         .replace("\n", " ")
-        .replace("\\", "")
         .replace("\\", "")
         .strip()
     )
@@ -267,7 +295,7 @@ def get_json_output(llm_response):
 
 def get_reflection(client, full_prompt, llm_response, model):
     reflection_prompt = f"""
-    You were given the following prompt:
+    You were giving the following prompt:
 
     {full_prompt}
 
@@ -279,8 +307,8 @@ def get_reflection(client, full_prompt, llm_response, model):
 
     Ensure that the following rules are satisfied when correcting your response:
     1. SQL is valid DuckDB SQL, given the provided metadata and the DuckDB querying rules
-    2. The query SPECIFICALLY references the correct tables: crm.csv, and those tables are properly aliased? (this is the most likely cause of failure)
-    3. Response is in the correct format ({{"sql": <sql_here>}} or {{"error": <explanation here>}}) with no additional text?
+    2. The query SPECIFICALLY references the correct tables: default.csv, and those tables are properly aliased? (this is the most likely cause of failure)
+    3. Response is in the correct format ({{sql: <sql_here>}} or {{"error": <explanation here>}}) with no additional text?
     4. All fields are appropriately named
     5. There are no unnecessary sub-queries
     6. ALL TABLES are aliased (extremely important)
@@ -299,58 +327,75 @@ def get_summarization(client, user_question, df, model, additional_context):
     To answer the question, a dataframe was returned:
 
     Dataframe:
-    {df.to_markdown(index=False)}
+    {df}
 
     In a few sentences, summarize the data in the table as it pertains to the original user question. Avoid qualifiers like "based on the data" and do not comment on the structure or metadata of the table itself
     """
-    if additional_context:
-        prompt += f"\nThe user has provided this additional context:\n{additional_context}"
+    if additional_context != "":
+        prompt += f"""\n
+        The user has provided this additional context:
+        {additional_context}
+        """
     return chat_with_groq(client, prompt, model)
 
 
-@app.post("/generate_query")
-async def generate_query(request: QueryRequest):
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    client = Groq(api_key=groq_api_key)
-    model = "llama3-70b-8192"
-    max_reflections = 5
-    additional_context = ""
-
-    with open("prompts/base_prompt.txt", "r") as file:
-        base_prompt = file.read()
-
-    full_prompt = base_prompt.format(user_question=request.user_question)
-    llm_response = chat_with_groq(client, full_prompt, model)
-
-    valid_response = False
-    i = 0
-    while not valid_response and i < max_reflections:
-        try:
-            is_sql, result = get_json_output(llm_response)
-            if is_sql:
-                results_df = execute_duckdb_query(result)
-                valid_response = True
-            else:
-                valid_response = True
-        except:
-            llm_response = get_reflection(client, full_prompt, llm_response, model)
-            i += 1
-
-    if not valid_response:
-        raise HTTPException(status_code=500, detail="Could not generate valid SQL for this question")
-
+@app.post("/generate-query")
+def query_data(request: QueryRequest):
     try:
+        # Get the Groq API key and create a Groq client
+        organization_id = request.organization_id
+        sheet_id = request.sheet_id
+        model = "llama3-70b-8192"
+        max_num_reflections = 5
+
+        client = Groq(api_key=config.GROQ_API_KEY)
+
+        # Load the base prompt
+        with open(f"prompts/{organization_id}_{sheet_id}_prompt.txt", "r") as file:
+            base_prompt = file.read()
+
+        # Generate the full prompt for the AI
+        full_prompt = base_prompt.format(user_question=request.user_question)
+
+        # Get the AI's response
+        llm_response = chat_with_groq(client, full_prompt, model)
+
+        # Try to process the AI's response
+        valid_response = False
+        i = 0
+        while valid_response is False and i < max_num_reflections:
+            try:
+                # Check if the AI's response contains a SQL query or an error message
+                is_sql, result = get_json_output(llm_response)
+                if is_sql:
+                    # If the response contains a SQL query, execute it
+                    results_df = execute_duckdb_query(result, organization_id, sheet_id)
+                    valid_response = True
+                else:
+                    # If the response contains an error message, it's considered valid
+                    valid_response = True
+            except:
+                # If there was an error processing the AI's response, get a reflection
+                llm_response = get_reflection(client, full_prompt, llm_response, model)
+                i += 1
+
+        # Prepare the result to be returned
         if is_sql:
-            summarization = get_summarization(client, request.user_question, results_df, model, additional_context)
+            # If the result is a SQL query, display the query and the resulting data
+            summarization = get_summarization(
+                client, request.user_question, results_df.to_markdown(), model, ""
+            )
             return {
-                "query": result,
+                "sql_query": result,
                 "data": results_df.to_dict(orient="records"),
-                "summarization": summarization.replace("$", "\\$")
+                "summarization": summarization
             }
         else:
+            # If the result is an error message, display it
             return {"error": result}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error displaying the result: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
