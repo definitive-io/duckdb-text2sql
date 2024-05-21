@@ -17,6 +17,56 @@ from pydantic import BaseModel
 app = FastAPI()
 
 
+SYSTEM_TEMPLATE = """Please read the columns of the dataframe and provide a description of their attributes. write it in the same form as the example.
+###Example
+[DateFrame]
+{}
+
+[Attributes]
+회사명 (VARCHAR): The name of the company.
+카테고리 (VARCHAR): The industry category to which the company belongs (e.g., 소프트웨어, 컨설팅, 제조업).
+거래단계 (VARCHAR): The current stage of the transaction with the company (e.g., 잠재고객, 협상 중, 자격 확인됨).
+회사설명 (TEXT): A brief description of the company's business and specialization.
+도메인 (VARCHAR): The company's website domain.
+투자단계 (VARCHAR): The investment stage of the company (e.g., 시리즈 A, 시리즈 B, 시리즈 C).
+거래일 (DATE): The date of the transaction.
+거래금액 (INTEGER): The amount of money involved in the transaction."""
+
+USER_TEMPLATE = """[DateFrame]
+{}
+
+[Attributes]"""
+
+NEW_PROMPT_TEMPLATE = """You are Groq Advisor, and you are tasked with generating SQL queries for DuckDB based on user questions about data stored in table:
+[Table] 
+table_{file_name}
+
+[Columns]
+{atttributes}
+
+
+Given a user's question about this data, write a valid DuckDB SQL query that accurately extracts or calculates the requested information from these tables and adheres to SQL best practices for DuckDB, optimizing for readability and performance where applicable.
+
+Here are some tips for writing DuckDB queries:
+* DuckDB syntax requires querying from the table. For example: SELECT * FROM table_{organization_id}_{sheet_id}
+* All tables referenced MUST be aliased
+* DuckDB does not implicitly include a GROUP BY clause
+* CURRENT_DATE gets today's date
+* Aggregated fields like COUNT(*) must be appropriately named
+
+Question:
+--------
+{{user_question}}
+--------
+Reminder: Generate a DuckDB SQL to answer to the question:
+* respond as a valid JSON Document
+* [Best] If the question can be answered with the available tables: {{{{"sql": <sql here>}}}}
+* If the question cannot be answered with the available tables: {{{{"error": <explanation here>}}}}
+* Ensure that the entire output is returned on only one single line
+* Keep your query as simple and straightforward as possible; do not use subqueries
+* The user has provided this additional context: 'please write explanation it in korean'"""
+
+
 def get_db_connection():
     try:
         connection = mysql.connector.connect(
@@ -36,57 +86,6 @@ def get_db_connection():
 def generate_prompt_and_update_files(update_csv_path, save_csv_path, organization_id, sheet_id):
     client = OpenAI(api_key=config.GPT_SERVER_KEY)
 
-    SYSTEM_TEMPLATE = """Please read the columns of the dataframe and provide a description of their attributes. write it in the same form as the example.
-    ###Example
-
-    [DateFrame]
-    {}
-
-    [Attributes]
-    회사명 (VARCHAR): The name of the company.
-    카테고리 (VARCHAR): The industry category to which the company belongs (e.g., 소프트웨어, 컨설팅, 제조업).
-    거래단계 (VARCHAR): The current stage of the transaction with the company (e.g., 잠재고객, 협상 중, 자격 확인됨).
-    회사설명 (TEXT): A brief description of the company's business and specialization.
-    도메인 (VARCHAR): The company's website domain.
-    투자단계 (VARCHAR): The investment stage of the company (e.g., 시리즈 A, 시리즈 B, 시리즈 C).
-    거래일 (DATE): The date of the transaction.
-    거래금액 (INTEGER): The amount of money involved in the transaction."""
-
-    USER_TEMPLATE = """[DateFrame]
-    {}
-
-    [Attributes]"""
-
-    NEW_PROMPT_TEMPLATE = """You are Groq Advisor, and you are tasked with generating SQL queries for DuckDB based on user questions about data stored in two tables derived from CSV files:
-    [Table] 
-    {file_name}
-
-    [Columns]
-    {atttributes}
-
-
-    Given a user's question about this data, write a valid DuckDB SQL query that accurately extracts or calculates the requested information from these tables and adheres to SQL best practices for DuckDB, optimizing for readability and performance where applicable.
-
-    Here are some tips for writing DuckDB queries:
-    * DuckDB syntax requires querying from the .csv file itself, i.e. crm.csv. For example: SELECT * FROM crm.csv as crm_table
-    * All tables referenced MUST be aliased
-    * DuckDB does not implicitly include a GROUP BY clause
-    * CURRENT_DATE gets today's date
-    * Aggregated fields like COUNT(*) must be appropriately named
-
-    Question:
-    --------
-    {{user_question}}
-    --------
-    Reminder: Generate a DuckDB SQL to answer to the question:
-    * respond as a valid JSON Document
-    * [Best] If the question can be answered with the available tables: {{"sql": <sql here>}}
-    * If the question cannot be answered with the available tables: {{"error": <explanation here>}}
-    * Ensure that the entire output is returned on only one single line
-    * Keep your query as simple and straightforward as possible; do not use subqueries
-
-    The user has provided this additional context: 'please write explanation it in korean'"""
-
     if os.path.exists(save_csv_path):
         # CSV Updating Process
         OLD = pd.read_csv(save_csv_path)
@@ -96,7 +95,7 @@ def generate_prompt_and_update_files(update_csv_path, save_csv_path, organizatio
         NEW = pd.read_csv(update_csv_path)
         NEW_MD = NEW.to_markdown(index=False)
         new_attribute = list(NEW.columns)
-        FILE_NAME = update_csv_path.split("/")[-1]
+        FILE_NAME = update_csv_path.split("/")[-1].split(".")[0]
 
         # Prompt Updating
         if old_attribute != new_attribute:
@@ -113,9 +112,9 @@ def generate_prompt_and_update_files(update_csv_path, save_csv_path, organizatio
             )
 
             output = response.choices[0].message.content.replace("[Attributes]\n", "")
-            new_prompt = NEW_PROMPT_TEMPLATE.format(file_name=FILE_NAME, atttributes=output)
+            new_prompt = NEW_PROMPT_TEMPLATE.format(file_name=FILE_NAME, atttributes=output, organization_id=organization_id, sheet_id=sheet_id)
 
-            prompt_path = './prompts/{}_prompt.txt'.format(FILE_NAME.split(".")[0])
+            prompt_path = './prompts/{}_prompt.txt'.format(FILE_NAME)
             with open(prompt_path, 'r', encoding='utf-8') as file:
                 old_prompt = file.readlines()
                 old_prompt = ''.join(old_prompt)
@@ -131,7 +130,7 @@ def generate_prompt_and_update_files(update_csv_path, save_csv_path, organizatio
 
         NEW = pd.read_csv(update_csv_path)
         NEW_MD = NEW.to_markdown(index=False)
-        FILE_NAME = update_csv_path.split("/")[-1]
+        FILE_NAME = update_csv_path.split("/")[-1].split(".")[0]
 
         system_prompt = SYSTEM_TEMPLATE.format(DEFAULT_DF)
         user_prompt = USER_TEMPLATE.format(NEW_MD)
@@ -147,7 +146,7 @@ def generate_prompt_and_update_files(update_csv_path, save_csv_path, organizatio
         )
 
         output = response.choices[0].message.content.replace("[Attributes]\n", "")
-        new_prompt = NEW_PROMPT_TEMPLATE.format(file_name=FILE_NAME, atttributes=output)
+        new_prompt = NEW_PROMPT_TEMPLATE.format(file_name=FILE_NAME, atttributes=output, organization_id=organization_id, sheet_id=sheet_id)
 
         prompt_path = './prompts/{}_prompt.txt'.format(FILE_NAME.split(".")[0])
         with open(prompt_path, 'w', encoding='utf-8') as file:
@@ -231,10 +230,15 @@ class QueryRequest(BaseModel):
     sheet_id: int
 
 
-def chat_with_groq(client, prompt, model):
+def chat_with_groq(client, incontext, prompt, model):
     completion = client.chat.completions.create(
-        model=model, messages=[{"role": "user", "content": prompt}]
+        model=model, 
+        messages=[{"role": "system", "content": incontext},
+                  {"role": "user", "content": prompt}],
+        temperature=0.6,
+        top_p=0.9,
     )
+    
     return completion.choices[0].message.content
 
 
@@ -247,16 +251,14 @@ def execute_duckdb_query(query, organization_id, sheet_id):
     print('file_name:', file_name)
 
     try:
-        conn = duckdb.connect(database=":memory:", read_only=False)
+        conn = duckdb.connect(database=":memory:", read_only=False)   
+        table_name = f"table_{organization_id}_{sheet_id}"
         # 파일이 존재하는지 확인하고 테이블로 로드
         if os.path.exists(file_name):
-            table_name = f"table_{organization_id}_{sheet_id}"
             conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM read_csv_auto('{file_name}')")
-            print(f"Table {table_name} created and data loaded.")
-
+            #print(f"Table {table_name} created and data loaded.")
             # 필요한 작업 수행 (예시로 테이블 조회)
-            query_result = conn.execute(f"SELECT * FROM {table_name}").fetchdf()
-            print(query_result)
+            #query_result = conn.execute(f"SELECT * FROM {table_name}").fetchdf()
             query_result = conn.execute(query).fetchdf().reset_index(drop=True)
 
         else:
@@ -272,6 +274,7 @@ def execute_duckdb_query(query, organization_id, sheet_id):
 
         # 작업 디렉토리를 원래의 디렉토리로 복원
         os.chdir(original_cwd)
+
     return query_result
 
 
@@ -293,7 +296,7 @@ def get_json_output(llm_response):
         return False, json_result["error"]
 
 
-def get_reflection(client, full_prompt, llm_response, model):
+def get_reflection(client, incontext, full_prompt, llm_response, model):
     reflection_prompt = f"""
     You were giving the following prompt:
 
@@ -307,7 +310,7 @@ def get_reflection(client, full_prompt, llm_response, model):
 
     Ensure that the following rules are satisfied when correcting your response:
     1. SQL is valid DuckDB SQL, given the provided metadata and the DuckDB querying rules
-    2. The query SPECIFICALLY references the correct tables: default.csv, and those tables are properly aliased? (this is the most likely cause of failure)
+    2. The query SPECIFICALLY references the correct tables: table_default, and those tables are properly aliased? (this is the most likely cause of failure)
     3. Response is in the correct format ({{sql: <sql_here>}} or {{"error": <explanation here>}}) with no additional text?
     4. All fields are appropriately named
     5. There are no unnecessary sub-queries
@@ -315,10 +318,10 @@ def get_reflection(client, full_prompt, llm_response, model):
 
     Rewrite the response and respond ONLY with the valid output format with no additional commentary
     """
-    return chat_with_groq(client, reflection_prompt, model)
+    return chat_with_groq(client, incontext, reflection_prompt, model)
 
 
-def get_summarization(client, user_question, df, model, additional_context):
+def get_summarization(client, incontext, user_question, df, model):
     prompt = f"""
     A user asked the following question pertaining to local database tables:
 
@@ -330,13 +333,9 @@ def get_summarization(client, user_question, df, model, additional_context):
     {df}
 
     In a few sentences, summarize the data in the table as it pertains to the original user question. Avoid qualifiers like "based on the data" and do not comment on the structure or metadata of the table itself
-    """
-    if additional_context != "":
-        prompt += f"""\n
-        The user has provided this additional context:
-        {additional_context}
-        """
-    return chat_with_groq(client, prompt, model)
+    """.format(user_question=user_question, df=df)
+
+    return chat_with_groq(client, incontext, prompt, model)
 
 
 @app.post("/generate-query")
@@ -349,17 +348,20 @@ def query_data(request: QueryRequest):
         max_num_reflections = 5
 
         client = Groq(api_key=config.GROQ_API_KEY)
+        
+        with open(f"prompts/base_prompt.txt", "r") as file:
+            base_prompt = file.read()
 
         # Load the base prompt
         with open(f"prompts/{organization_id}_{sheet_id}_prompt.txt", "r") as file:
-            base_prompt = file.read()
+            input_prompt = file.read()
 
         # Generate the full prompt for the AI
-        full_prompt = base_prompt.format(user_question=request.user_question)
+        full_prompt = input_prompt.format(user_question=request.user_question)
 
         # Get the AI's response
-        llm_response = chat_with_groq(client, full_prompt, model)
-
+        llm_response = chat_with_groq(client, base_prompt, full_prompt, model)
+        is_sql, result = get_json_output(llm_response)
         # Try to process the AI's response
         valid_response = False
         i = 0
@@ -376,14 +378,14 @@ def query_data(request: QueryRequest):
                     valid_response = True
             except:
                 # If there was an error processing the AI's response, get a reflection
-                llm_response = get_reflection(client, full_prompt, llm_response, model)
+                llm_response = get_reflection(client, base_prompt, full_prompt, llm_response, model)
                 i += 1
 
         # Prepare the result to be returned
         if is_sql:
             # If the result is a SQL query, display the query and the resulting data
             summarization = get_summarization(
-                client, request.user_question, results_df.to_markdown(), model, ""
+                client, base_prompt, request.user_question, results_df.to_markdown(), model
             )
             return {
                 "sql_query": result,
